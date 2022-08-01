@@ -1572,11 +1572,11 @@ class PowerRunner extends Runner{
 }
 class Shooter extends Runner{
 	rot = PI;
-	range = 5;
-	fireRate = 500;
-	atk = .35;
+	range = 15;
+	fireRate = 1000;
+	atk = .1;
 	xp = 4;
-	col = "#ff0"
+	col = "#ff0";
 	levelup() {
 		super.levelup();
 		this.fireRate /= this.inc;
