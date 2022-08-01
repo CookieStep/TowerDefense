@@ -1008,6 +1008,9 @@ class ShooterTower extends Tower{
 	}
 }
 class PushTower extends Tower{
+	controlled() {
+		document.exitPointerLock();
+	}
 	timer = 'p/s';
 	atk = 1.5;
 	fireRate = 100;
@@ -1052,6 +1055,9 @@ class PushTower extends Tower{
 	}
 }
 class SpikeTower extends Tower{
+	controlled() {
+		document.exitPointerLock();
+	}
 	col = "#aac";
 	timer = 'a/s';
 	atk = 4;
@@ -1097,6 +1103,9 @@ class SpikeTower extends Tower{
 	}
 }
 class Bomb extends SpikeTower{
+	controlled() {
+		document.exitPointerLock();
+	}
 	name = "Bomb";
 	col = "#325";
 	fireRate = 4000;
