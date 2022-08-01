@@ -1413,7 +1413,7 @@ class Enemy extends Entity{
 	inc = 1.8**.1;
 	mult = 1;
 	doLevelups() {
-		for(let i = 0; i < wave; i++) {
+		for(let i = 1; i < wave; i++) {
 			this.levelup();
 		}
 	}
@@ -1572,9 +1572,9 @@ class PowerRunner extends Runner{
 }
 class Shooter extends Runner{
 	rot = PI;
-	range = 7;
-	fireRate = 750;
-	atk = .5;
+	range = 5;
+	fireRate = 500;
+	atk = .35;
 	xp = 4;
 	col = "#ff0"
 	levelup() {
@@ -1780,7 +1780,6 @@ class Boss extends Enemy{
 					for(let i = 0; i < 3; i++) {
 						var enemy = new Shooter;
 						Bullet.position(enemy, this);
-						enemy.hp *= 10;
 						enemy.spd *= 3/4;
 						enemy.vx = sin(i*PI2/3+o)*1.2;
 						enemy.vy = cos(i*PI2/3+o)*1.2;
