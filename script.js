@@ -269,7 +269,7 @@ function frame() {
 	ctx.restore();
 }
 function randomEnemy() {
-	var num = min(enemySets.length-1, floor(wave/10));
+	var num = min(enemySets.length-1, floor(wave/5));
 	return weight(...enemySets[num]);
 }
 var pointMax = 20;
@@ -1572,13 +1572,15 @@ class PowerRunner extends Runner{
 }
 class Shooter extends Runner{
 	rot = PI;
-	range = 5;
+	range = 7;
 	fireRate = 750;
 	atk = .5;
 	xp = 4;
+	col = "#ff0"
 	levelup() {
 		super.levelup();
 		this.fireRate /= this.inc;
+		this.range *= this.inc;
 	}
 	tick() {
 		super.tick();
