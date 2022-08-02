@@ -6,6 +6,12 @@ var tutorial = 0;
 var tutorialPhase = 0;
 var tutorialButton;
 var showXP;
+var gameSpeed = 1;
+var MAX_SPEED = 3;
+var hardMode = 0;
+var frameTime;
+
+++MAX_SPEED;
 
 var BASE_HEALTH = 10;
 var BASE_MAX_HEALTH = 10;
@@ -38,6 +44,7 @@ function frame() {
 	ms = Date.now()-lastFrame;
 	lastFrame = Date.now();
 	var fps = 1000/ms;
+	frameTime = 0;
 	
 	var hovers = [];
 	if(document.pointerLockElement !== canvas) for(let button of buttons) {
@@ -52,17 +59,25 @@ function frame() {
 		}
 		ally.hover = 0;
 	}
+	for(let enemy of enemies) {
+		if(Entity.isTouching(enemy, mouse_hitbox())) {
+			hovers.push(enemy);
+		}
+		enemy.hover = 0;
+	}
 	var [hover] = hovers.sort((a, b)=>b.priority-a.priority);
 	if(hover) {
 		hover.hover = 1;
 	}
 
-	let MS = min(ms, FRAME);
+	let MS = ceil(min(ms, FRAME)*(gameSpeed||.5));
+	var __ms = MS;
 	while(MS) {
 		ms = min(MS, 1);
 		ps = ms/FRAME;
 
 		gameTime += ms;
+		frameTime += ms;
 		doFrame();
 		MS -= ms;
 		msTillFrame = MS;
@@ -74,22 +89,42 @@ function frame() {
 	ctx.translate(game_ox, game_oy);
 	ctx.scale(scale, scale);	
 
-	if(document.pointerLockElement !== canvas) if(keys.check("MouseLeft", 1) || (__mousewas2 && mousetower && keys.check("MouseLeft", 0))) {
-		var clicks = [];
-		for(let button of buttons) {
-			if(Entity.isTouching(button, mouse_hitbox())) {
-				clicks.push(button);
+	if(document.pointerLockElement !== canvas) {
+		if(keys.check("MouseLeft", 1) || (__mousewas2 && mousetower && keys.check("MouseLeft", 0))) {
+			var clicks = [];
+			for(let button of buttons) {
+				if(Entity.isTouching(button, mouse_hitbox())) {
+					clicks.push(button);
+				}
+			}
+			for(let ally of allies) {
+				if(Entity.isTouching(ally, mouse_hitbox())) {
+					clicks.push(ally);
+				}
+			}
+			var [click] = clicks.sort((a, b)=>b.priority-a.priority);
+			if(click) {
+				click.click();
+				keys.use("MouseLeft");
 			}
 		}
-		for(let ally of allies) {
-			if(Entity.isTouching(ally, mouse_hitbox())) {
-				clicks.push(ally);
+		if(keys.check("MouseRight", 1)) {
+			var clicks = [];
+			for(let button of buttons) {
+				if(Entity.isTouching(button, mouse_hitbox())) {
+					clicks.push(button);
+				}
 			}
-		}
-		var [click] = clicks.sort((a, b)=>b.priority-a.priority);
-		if(click) {
-			click.click();
-			keys.use("MouseLeft");
+			for(let ally of allies) {
+				if(Entity.isTouching(ally, mouse_hitbox())) {
+					clicks.push(ally);
+				}
+			}
+			var [click] = clicks.sort((a, b)=>b.priority-a.priority);
+			if(click) {
+				click.rightClick();
+				keys.use("MouseRight");
+			}
 		}
 	}
 	
@@ -105,9 +140,18 @@ function frame() {
 		selectedTower = undefined;
 	}
 
+	ms = __ms;
+	msTillFrame = 0;
+	ps = ms/FRAME;
 	for(let particle of particles) {
-		particle.draw();
+		particle.frame();
+		particle.update();
+		if(!particle.dead) {
+			particle.draw();
+		}
 	}
+	particles.clean();
+
 	var Ms = mouse_size;
 	mouse_size = 0;
 	for(let i = allies.length-1; i >= 0; --i) {
@@ -192,6 +236,7 @@ function frame() {
 				for(let i = 1; i < hotbar.length; i++) {
 					buttons.push(new TowerButton(i));
 				}
+				buttons.push(new SpeedButton);
 			}
 		}
 		if(tutorialPhase == 5) {
@@ -272,7 +317,7 @@ function randomEnemy() {
 	var num = min(enemySets.length-1, floor(wave/5));
 	return weight(...enemySets[num]);
 }
-var pointMax = 20;
+var pointMax = 10;
 var points = pointMax;
 var waveTime = 0;
 var wave = 1;
@@ -291,9 +336,6 @@ function doFrame() {
 	}
 	for(let enemy of enemies) {
 		enemy.frame();
-	}
-	for(let particle of particles) {
-		particle.frame();
 	}
 	for(let t = gameTime - ms; t < gameTime; t++) {
 		if(inWave) {
@@ -374,9 +416,6 @@ function doFrame() {
 			}
 		}
 	}
-	for(let particle of particles) {
-		particle.update();
-	}
 	if(BASE_HEALTH <= 0) {
 		enemies.forEach(a => a.dead = 1);
 		allies.forEach(a => a.dead = 1);
@@ -385,7 +424,6 @@ function doFrame() {
 		inWave = 0;
 		BASE_HEALTH = BASE_MAX_HEALTH;
 	}
-	particles.clean();
 	allies.clean();
 	enemies.clean();
 	buttons.clean();
@@ -433,6 +471,7 @@ class Entity{
 	c = "white";
 	priority = 2;
 	click() {}
+	rightClick() {}
 	register(what) {}
 	hit(what) {
 		what.hp -= this.atk;
@@ -724,6 +763,7 @@ class Tower extends Entity{
 	lvl = 1;
 	priority = 4;
 	mult = 1;
+	returnMoney = 0;
 	levelupStats() {
 		this.fireRate /= this.inc;
 		this.range *= this.inc;
@@ -922,6 +962,8 @@ class Tower extends Entity{
 		delete this.target;
 		this.DIS = this.range*this.range;
 
+		if(this.xp > this.lxp) this.levelup();
+
 		if((selectedTower == undefined || selectedTower == -1) && this.hover && !this.statsButton) {
 			for(let button of buttons) if(button instanceof StatsButton) return;
 			this.statsButton = new StatsButton(this);
@@ -1006,6 +1048,12 @@ class ShooterTower extends Tower{
 		ctx.restore();
 		super.draw(...arguments);
 	}
+	levelupStats() {
+		super.levelupStats();
+		if(this.range > 25) {
+			this.range = 25;
+		}
+	}
 }
 class PushTower extends Tower{
 	controlled() {
@@ -1062,16 +1110,17 @@ class SpikeTower extends Tower{
 	timer = 'a/s';
 	atk = 4;
 	fireRate = 1000;
-	range = 15;
+	range = 12;
 	hp = 2;
 	xhp = 2;
 	towerType = "Trap";
 	name = "Spike Trap";
-	cost = 15;
+	cost = 20;
 	levelupStats() {
-		var {range} = this;
 		super.levelupStats(this);
-		this.range = range;
+		if(this.range > 20) {
+			this.range = 20;
+		}
 	}
 	shoot() {
 		if(this.lastShot) return;
@@ -1139,11 +1188,13 @@ class Bomb extends SpikeTower{
 	}
 }
 
-
 class Button{
-	constructor(onclick) {
+	constructor(onclick, onrightclick) {
 		if(onclick) {
 			this.click = onclick;
+		}
+		if(onrightclick) {
+			this.rightClick = onrightclick;
 		}
 	}
 	update() {
@@ -1259,6 +1310,7 @@ class TowerButton extends Button{
 					mousetower = undefined;
 					return;
 				}
+				tower.returnMoney += tower.cost;
 				Bullet.position(tower, mouse_hitbox());
 				allies.push(tower);
 				delete hotbartowers[selectedTower];
@@ -1274,17 +1326,25 @@ class TowerButton extends Button{
 			mousetower = hotbartowers[selectedTower];
 		}
 	}
-	
+	rightClick() {}
 }
 class StatsButton extends TowerButton{
 	constructor(tower) {
 		super();
 		this.tower = tower;
+		if(this.tower.type == "enemy") {
+			this.priority = -2;
+		}
 	}
 	update() {
 		if((!this.hover && !this.tower.hover) || this.tower.dead) {
-			this.dead = 1;
-			delete this.tower.statsButton;
+			if(this.tower.dead || !(this.mx == mouse_x && this.my == mouse_y)) {
+				this.dead = 1;
+				delete this.tower.statsButton;
+			}
+		}else{
+			this.mx = mouse_x;
+			this.my = mouse_y;
 		}
 		this.col = this.tower.col;
 	}
@@ -1309,16 +1369,33 @@ class StatsButton extends TowerButton{
 		if(tower) {
 			let {fireRate, inc, atk, timer, range, xhp} = tower;
 			var obj = {fireRate, inc, atk, timer, range, xhp};
-			tower.levelupStats.call(obj);
+			tower.levelupStats?.call(obj);
 		}
-		this.obj = obj;
-		var text = [
-			`Level up (${cost}p)`,
-			`${stat(tower?.atk)} -> ${stat(obj?.atk)} power`,
-			`${stat(tower?.hp)} -> ${stat(obj?.xhp)} hp`,
-			`${stat(tower?.range)} -> ${stat(obj?.range)} range`,
-			`${round(100000/tower?.fireRate)/100} -> ${round(100000/obj?.fireRate)/100} ${tower.timer}`
-		];
+		if(tower?.type == "enemy") {
+			var text = [
+				`Level: ${tower?.lvl}`,
+				`${stat(tower?.atk)} power`,
+				`${stat(tower?.xhp)} hp`,
+				`${stat(tower?.spd)} spd`
+			];
+			if(tower?.range) {
+				text.push(`${stat(tower?.range)} range`)
+			}
+			if(tower?.fireRate) {
+				`${round(100000/tower?.fireRate)/100} ${tower.timer}`
+			}
+		}else{
+			this.obj = obj;
+			var text = [
+				`Level up (${cost}p)`,
+				`${stat(tower?.atk)} -> ${stat(obj?.atk)} power`,
+				`${stat(tower?.hp)} -> ${stat(obj?.xhp)} hp`,
+				`${stat(tower?.range)} -> ${stat(obj?.range)} range`,
+				`${round(100000/tower?.fireRate)/100} -> ${round(100000/obj?.fireRate)/100} ${tower.timer}`
+			];
+			var Delete = `Refund: ${tower?.returnMoney}p`;
+			text.push(Delete);
+		}
 		if(this.forceText) text = this.forceText;
 		var wids = text.map(txt => ctx.measureText(txt).width);
 		var padding = .5;
@@ -1360,8 +1437,8 @@ class StatsButton extends TowerButton{
 
 		ctx.fillRect(this.x, this.y, bubbleWidth, bubbleHeight);
 		var l = text.length;
-		ctx.fillStyle = "white";
 		for(let i = 0; i < l; i++) {
+			ctx.fillStyle = "white";
 			ctx.fillText(text[i], tx+s-wids[i]/2, 1+padding*.5+this.y+i*(padding+1));
 		}
 
@@ -1377,7 +1454,12 @@ class StatsButton extends TowerButton{
 			this.tower.xp = this.tower.lxp;
 			this.tower.levelup();
 			money -= cost;
+			this.tower.returnMoney += cost;
 		}
+	}
+	rightClick() {
+		this.tower.dead = 1;
+		money += this.tower.returnMoney;
 	}
 	priority = 5;
 }
@@ -1402,6 +1484,26 @@ class StartWave extends TowerButton{
 		}
 	}
 }
+class SpeedButton extends TowerButton{
+	constructor() {
+		super();
+		this.x = GAME_WIDTH - (this.s * 4);
+	}
+	col = "#f00";
+	text = ["Change Speed"]
+	update() {
+		super.update();
+		this.text[1] = `Speed: ${gameSpeed||"1/2"}x`;
+	}
+	rightClick() {
+		gameSpeed += 1;
+		gameSpeed %= MAX_SPEED;
+	}
+	click() {
+		gameSpeed += MAX_SPEED-1;
+		gameSpeed %= MAX_SPEED;
+	}
+}
 
 class Enemy extends Entity{
 	dmgclr = '#f70'
@@ -1412,6 +1514,8 @@ class Enemy extends Entity{
 	spd = 0.03;
 	inc = 1.8**.1;
 	mult = 1;
+	lvl = 1;
+	priority = 2;
 	doLevelups() {
 		for(let i = 1; i < wave; i++) {
 			this.levelup();
@@ -1445,16 +1549,27 @@ class Enemy extends Entity{
 	deadCheck() {
 		super.deadCheck();
 		if(this.dead) {
-			money += floor(this.xp * BASE_HEALTH/BASE_MAX_HEALTH)||1;
-			totalMoney += floor(this.xp * BASE_HEALTH/BASE_MAX_HEALTH)||1;
+			var mult = hardMode? .75: 1;
+			money += floor(this.xp * BASE_HEALTH/BASE_MAX_HEALTH*mult)||1;
+			totalMoney += floor(this.xp * BASE_HEALTH/BASE_MAX_HEALTH*mult)||1;
 		}
 	}
 	levelup() {
+		++this.lvl;
 		this.atk *= this.inc;
 		this.xhp *= this.inc;
 		this.hp = this.xhp
 		this.xp *= this.inc;
 		this.mult *= this.inc;
+	}
+	frame() {
+		super.frame();
+
+		if((selectedTower == undefined || selectedTower == -1) && this.hover && !this.statsButton) {
+			for(let button of buttons) if(button instanceof StatsButton) return;
+			this.statsButton = new StatsButton(this);
+			buttons.push(this.statsButton);
+		}
 	}
 }
 class Runner extends Enemy{
@@ -1572,15 +1687,20 @@ class PowerRunner extends Runner{
 }
 class Shooter extends Runner{
 	rot = PI;
-	range = 15;
+	range = 5;
 	fireRate = 1000;
-	atk = .1;
-	xp = 4;
+	timer = 'b/s'
+	atk = .15;
+	xp = 6;
 	col = "#ff0";
 	levelup() {
 		super.levelup();
 		this.fireRate /= this.inc;
-		this.range *= this.inc;
+		this.range    *= this.inc;
+
+		if (this.range > 25) {
+			this.range = 25;
+		}
 	}
 	tick() {
 		super.tick();
@@ -1669,7 +1789,7 @@ class Boss extends Enemy{
 		if(this.dead) {
 			this.gxp *= this.mult;
 			var arr = allies.filter(a => a.type == "tower");
-			var xp = 10*this.gxp/arr.length;
+			var xp = this.gxp/arr.length;
 			arr.forEach(a => {
 				a.xp += xp;
 				while(a.xp > a.lxp) a.levelup();
@@ -1738,7 +1858,7 @@ class Boss extends Enemy{
 				this.ax = -this.spd;
 				this.range = 25;
 				this.shots = 10;
-				this.switch(1, 3000);
+				this.switch(1, 2000);
 
 				delete this.target;
 				this.DIS = this.range*this.range;
@@ -1759,11 +1879,12 @@ class Boss extends Enemy{
 						delete this.target;
 						this.DIS = this.range*this.range;
 						--this.shots;
+						this.time = 0;
 					}
 				}else if(this.ignore.length) {
 					this.ignore = [];
 				}
-				if(this.shots == 0 || this.time > 10000) {
+				if(this.shots == 0 || this.time > 1000) {
 					this.phase = 2;
 					this.time = 0;
 				}
@@ -1795,7 +1916,7 @@ class Boss extends Enemy{
 				this.ax = -this.spd;
 				this.range = 25;
 				this.shots = 10;
-				this.switch(1, 1000);
+				this.switch(1, 2000);
 
 				delete this.target;
 				this.DIS = this.range*this.range;
@@ -1820,11 +1941,33 @@ class Particle extends Entity{
 		super();
 		this.rot = rand(PI2);
 		this.r   = rand(PI2);
+		this.frameTime = frameTime;
 	}
 	s = .5;
 	spd = .03;
 	time = 300;
 	f = 0.03;
+	get ps() {
+		return (ms - (this.frameTime||0))/FRAME;
+	}
+	update() {
+		if(this.dead) return;
+		var {vx, vy, ps} = this;
+
+		this.vx += this.ax*ps;
+		this.vy += this.ay*ps;
+
+		var mx = (this.vx+vx)/2;
+		var my = (this.vy+vy)/2;
+
+		this.vx -= ps*this.f*mx;
+		this.vy -= ps*this.f*my;
+
+		this.x += ps*mx;
+		this.y += ps*my;
+		this.screenlock();
+		delete this.frameTime;
+	}
 	tick() {
 		if(!this.maxTime) {
 			this.maxTime = this.time;
@@ -1832,11 +1975,11 @@ class Particle extends Entity{
 				this.dead = 1;
 			}
 		}
-		this.rot += 0.1*ps;
+		this.rot += 0.1*this.ps;
 		this.ax += cos(this.r)*this.spd;
 		this.ay += sin(this.r)*this.spd;
 		if(this.time > 0) {
-			this.time -= ms;
+			this.time -= ms - (this.frameTime||0);
 		}
 		if(this.time <= 0) {
 			this.dead = 1;
@@ -1891,12 +2034,12 @@ class TextParticle extends Particle{
 			}
 		}
 		if(this.time > 0) {
-			this.time -= ms;
+			this.time -= ms - (this.frameTime||0);
 		}
 		if(this.time <= 0) {
 			this.dead = 1;
 		}
-		this.y -= this.spd*ps;
+		this.y -= this.spd*this.ps;
 	}
 }
 
@@ -2016,7 +2159,7 @@ onload = () => {
 		tower.hp = 1;
 		allies.push(tower);
 	}else{
-		buttons.push(new TowerButton(-1), new TowerButton(0), new TowerButton(1), new TowerButton(2), new TowerButton(3), new StartWave());
+		buttons.push(new TowerButton(-1), new TowerButton(0), new TowerButton(1), new TowerButton(2), new TowerButton(3), new StartWave(), new SpeedButton());
 	}
 	frame();
 };
